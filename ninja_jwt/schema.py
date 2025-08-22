@@ -257,9 +257,9 @@ class TokenRefreshOutputSchema(Schema):
                         # not be present
                         pass
 
-                refresh.set_jti()
-                refresh.set_exp()
                 refresh.set_iat()
+                refresh.set_exp()
+                refresh.set_jti()
 
                 data["refresh"] = str(refresh)
             values.update(data)
