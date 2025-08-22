@@ -240,7 +240,7 @@ class BlacklistMixin:
                 defaults={
                     "token": str(self),
                     "expires_at": datetime_from_epoch(exp),
-                    "created_at": iat,
+                    "created_at": datetime_from_epoch(iat),
                     "user_id": user_id,
                 },
             )
