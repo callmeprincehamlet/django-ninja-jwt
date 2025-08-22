@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-from typing import Any, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 from uuid import uuid4
 
 from django.conf import settings
@@ -22,7 +22,12 @@ class Token:
     token_type: Optional[str] = None
     lifetime: Optional[datetime] = None
 
-    def __init__(self, token: Optional[Any] = None, verify: bool = True) -> None:
+    def __init__(
+        self, 
+        token: Optional[Any] = None, 
+        verify: bool = True,
+        extra_payload: Optional[Dict[str, Any]] = None,
+    ) -> None:
         """
         !!!! IMPORTANT !!!! MUST raise a TokenError with a user-facing error
         message if the given token is invalid, expired, or otherwise not safe
@@ -44,12 +49,18 @@ class Token:
                 self.payload = token_backend.decode(token, verify=verify)
             except TokenBackendError as e:
                 raise TokenError(_("Token is invalid or expired")) from e
+            
+            if extra_payload:
+                self.payload.update(extra_payload)
 
             if verify:
                 self.verify()
         else:
             # New token.  Skip all the verification steps.
-            self.payload = {api_settings.TOKEN_TYPE_CLAIM: self.token_type}
+            self.payload = {
+                api_settings.TOKEN_TYPE_CLAIM: self.token_type,
+                **(extra_payload or {}),
+            }
 
             # Set "exp" and "iat" claims with default value
             self.set_exp(from_time=self.current_time, lifetime=self.lifetime)
@@ -190,8 +201,7 @@ class Token:
         if not isinstance(user_id, int):
             user_id = str(user_id)
 
-        token = cls()
-        token[api_settings.USER_ID_CLAIM] = user_id
+        token = cls(extra_payload={api_settings.USER_ID_CLAIM: user_id})
 
         return token
 
@@ -263,18 +273,6 @@ class BlacklistMixin:
             token = self.get_or_create_outstanding_token()
 
             return BlacklistedToken.objects.get_or_create(token=token)
-
-        @classmethod
-        def for_user(cls, user: "AbstractBaseUser") -> Token:
-            """
-            Adds this token to the outstanding token list.
-            """
-            token = super().for_user(user)
-
-            jti = token[api_settings.JTI_CLAIM]
-            exp = token["exp"]
-
-            return token
 
 
 class SlidingToken(BlacklistMixin, Token):
