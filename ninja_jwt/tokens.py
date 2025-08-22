@@ -218,9 +218,11 @@ class BlacklistMixin:
 
     if "ninja_jwt.token_blacklist" in settings.INSTALLED_APPS:
         
-        def get_outstanding_token(self) -> OutstandingToken:
+        def get_or_create_outstanding_token(self) -> OutstandingToken:
             jti = self.payload[api_settings.JTI_CLAIM]
+            iat = self.payload["iat"]
             exp = self.payload["exp"]
+            user_id = self.payload[api_settings.USER_ID_CLAIM]
 
             # Ensure outstanding token exists with given jti
             token, _ = OutstandingToken.objects.get_or_create(
@@ -228,6 +230,8 @@ class BlacklistMixin:
                 defaults={
                     "token": str(self),
                     "expires_at": datetime_from_epoch(exp),
+                    "created_at": iat,
+                    "user_id": user_id,
                 },
             )
             return token
@@ -239,7 +243,7 @@ class BlacklistMixin:
             
         def set_jti(self) -> None:
             super().set_jti()
-            self.get_outstanding_token()
+            self.get_or_create_outstanding_token()
 
         def check_blacklist(self) -> None:
             """
@@ -256,7 +260,7 @@ class BlacklistMixin:
             Ensures this token is included in the outstanding token list and
             adds it to the blacklist.
             """
-            token = self.get_outstanding_token()
+            token = self.get_or_create_outstanding_token()
 
             return BlacklistedToken.objects.get_or_create(token=token)
 
@@ -269,14 +273,6 @@ class BlacklistMixin:
 
             jti = token[api_settings.JTI_CLAIM]
             exp = token["exp"]
-
-            OutstandingToken.objects.create(
-                user=user,
-                jti=jti,
-                token=str(token),
-                created_at=token.current_time,
-                expires_at=datetime_from_epoch(exp),
-            )
 
             return token
 
